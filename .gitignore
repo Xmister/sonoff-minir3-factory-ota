@@ -3,7 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 
-# Device images, flash dumps, and cloud credentials must never be committed.
+# Firmware images and cloud credentials must never be committed.
 *.bin
 *.ota
 *.bundle
