@@ -3,6 +3,11 @@
 Tools used to package and deliver a replacement BL602 firmware image through
 the factory eWeLink OTA path on a Sonoff MINI R3.
 
+The idea was inspired by [SonOTA](https://github.com/mirko/SonOTA), which
+demonstrated flashing Sonoff devices through the original OTA mechanism. This
+repository contains an independent implementation for the MINIR3 and shares no
+SonOTA code.
+
 This repository is specific to the BL602 Sonoff MINI R3 layout that reports
 model `BL1-S04-01`. Do not use these packages for another board or for a
 generic BL602 layout.
