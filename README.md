@@ -106,87 +106,8 @@ sha256sum firmware.bundle
 
 ## 3. Serve the bundle
 
-### Option A: direct HTTP with Docker
-
-The examples directory contains an Nginx virtual host and Compose file. From
-the repository root:
-
-```sh
-docker compose -f examples/docker-compose.yml up ota-http
-```
-
-This serves:
-
-```text
-http://<server-address>:18767/firmware.bin
-```
-
-The equivalent standalone command is:
-
-```sh
-docker run --rm \
-  --name minir3-ota-http \
-  -p 18767:80 \
-  -v "$PWD/firmware.bundle:/usr/share/nginx/html/firmware.bin:ro" \
-  -v "$PWD/examples/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-  nginx:1.27-alpine
-```
-
-Verify normal and ranged responses:
-
-```sh
-curl -fI http://127.0.0.1:18767/firmware.bin
-curl -f \
-  -H 'Range: bytes=0-31' \
-  -o /tmp/firmware-range.bin \
-  http://127.0.0.1:18767/firmware.bin
-
-test "$(wc -c </tmp/firmware-range.bin)" -eq 32
-```
-
-If the MINI R3 cannot reach the Docker host directly, expose the same endpoint
-through a tunnel.
-
-### Option B: HTTPS with a temporary Cloudflare tunnel
-
-Start Nginx and Cloudflare Tunnel together:
-
-```sh
-docker compose -f examples/docker-compose.yml up
-```
-
-Read the generated public URL from the tunnel log:
-
-```sh
-docker compose -f examples/docker-compose.yml logs -f ota-tunnel
-```
-
-Cloudflare prints a temporary URL similar to:
-
-```text
-https://random-words-1234.trycloudflare.com
-```
-
-Append `/firmware.bin` and use that complete URL as `--url`:
-
-```text
-https://random-words-1234.trycloudflare.com/firmware.bin
-```
-
-Verify it through the tunnel before sending the upgrade command:
-
-```sh
-curl -fI https://random-words-1234.trycloudflare.com/firmware.bin
-```
-
-Quick tunnels are temporary and have a new hostname on every start. For a
-stable deployment, use a named Cloudflare Tunnel, Tailscale Funnel, or another
-HTTPS reverse proxy. Keep the endpoint restricted for the duration of the
-upgrade.
-
-### Option C: included Python server
-
-The repository also includes a dependency-free range server:
+Run the included range server on a host connected to the same LAN as the MINI
+R3:
 
 ```sh
 python3 scripts/serve_range.py \
@@ -196,8 +117,34 @@ python3 scripts/serve_range.py \
   --range-status 206
 ```
 
-It exposes `http://<server-address>:18767/firmware.bin` and can be placed
-behind any HTTPS reverse proxy or tunnel.
+Find the LAN address of that host:
+
+```sh
+ip -4 route get 1.1.1.1 | awk '{print $7; exit}'
+```
+
+If the command prints `192.168.4.10`, the device URL is:
+
+```text
+http://192.168.4.10:18767/firmware.bin
+```
+
+Allow inbound TCP port `18767` in the host firewall. The MINI R3 and this host
+must be on reachable LAN/VLANs. From another computer on the same network,
+verify both the full response and byte ranges:
+
+```sh
+curl -fI http://192.168.4.10:18767/firmware.bin
+
+curl -f \
+  -H 'Range: bytes=0-31' \
+  -o /tmp/firmware-range.bin \
+  http://192.168.4.10:18767/firmware.bin
+
+test "$(wc -c </tmp/firmware-range.bin)" -eq 32
+```
+
+Use the same LAN address as `--url` when triggering the update.
 
 ## 4. Trigger the cloud upgrade
 
@@ -210,7 +157,7 @@ python3 scripts/ewelink_upgrade.py \
   --device-id <eweLink-device-id> \
   --model BL1-S04-01 \
   --version 2026.11.6.3 \
-  --url https://ota.example.test/firmware.bundle \
+  --url http://192.168.4.10:18767/firmware.bin \
   --sha256 <bundle-sha256>
 ```
 
@@ -227,8 +174,6 @@ prints the matching cloud response.
 | `scripts/build_ewelink_bl602_bundle.py` | Build the multi-component eWeLink wrapper |
 | `scripts/serve_range.py` | Serve one bundle over HTTP with byte ranges |
 | `scripts/ewelink_upgrade.py` | Send the targeted eWeLink cloud upgrade command |
-| `examples/nginx.conf` | Minimal Nginx site for `/firmware.bin` |
-| `examples/docker-compose.yml` | Nginx and optional Cloudflare quick tunnel |
 
 Run the local checks with:
 
