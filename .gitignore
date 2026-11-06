@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Device images, flash dumps, and cloud credentials must never be committed.
+*.bin
+*.ota
+*.bundle
+*.uf2
+core.config_entries
+secrets.yaml
+
