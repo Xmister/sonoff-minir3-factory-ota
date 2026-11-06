@@ -146,7 +146,47 @@ test "$(wc -c </tmp/firmware-range.bin)" -eq 32
 
 Use the same LAN address as `--url` when triggering the update.
 
-## 4. Trigger the cloud upgrade
+## 4. Find the eWeLink device ID
+
+The eWeLink device ID is the opaque cloud identifier for one physical device
+in your eWeLink account. It is used to address the upgrade command to exactly
+that device. It is distinct from the MAC address, IP address, Sonoff sticker
+serial number, and eWeLink API key.
+
+With Home Assistant and the Sonoff integration already configured, list all
+eWeLink devices:
+
+```sh
+python3 scripts/list_ewelink_devices.py --ha-config /config
+```
+
+Example output:
+
+```text
+NAME              DEVICE_ID          MODEL       ONLINE
+Terasz            <device-id>        BL1-S04-01  True
+Konyha MINI R3    <another-id>       BL1-S04-01  True
+```
+
+Filter by the name configured in eWeLink:
+
+```sh
+python3 scripts/list_ewelink_devices.py \
+  --ha-config /config \
+  --name Terasz
+```
+
+Use the `DEVICE_ID` value for that row as `--device-id`. The helper reads the
+credentials already stored by the Home Assistant Sonoff integration and does
+not print them.
+
+You can also look in the eWeLink app under the device's settings or device
+information. Menu labels vary by app version; the value may be labelled
+`Device ID`. If it is not displayed there, use the Home Assistant helper above.
+
+Treat the ID as account metadata and avoid committing it to the repository.
+
+## 5. Trigger the cloud upgrade
 
 Run the trigger in the Home Assistant environment that already has an
 authenticated Sonoff integration:
@@ -173,6 +213,7 @@ prints the matching cloud response.
 | `scripts/build_minir3_staged_ota.py` | Wrap a LibreTiny staged image for factory OTA |
 | `scripts/build_ewelink_bl602_bundle.py` | Build the multi-component eWeLink wrapper |
 | `scripts/serve_range.py` | Serve one bundle over HTTP with byte ranges |
+| `scripts/list_ewelink_devices.py` | List device IDs through Home Assistant |
 | `scripts/ewelink_upgrade.py` | Send the targeted eWeLink cloud upgrade command |
 
 Run the local checks with:

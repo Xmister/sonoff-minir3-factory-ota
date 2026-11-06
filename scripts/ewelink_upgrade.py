@@ -10,6 +10,8 @@ from pathlib import Path
 import sys
 import time
 
+from ewelink_common import device_model, load_sonoff_config
+
 
 async def run(args: argparse.Namespace) -> int:
     import aiohttp
@@ -17,9 +19,7 @@ async def run(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(args.ha_config))
     from custom_components.sonoff.core.ewelink.cloud import XRegistryCloud
 
-    entries_path = args.ha_config / ".storage" / "core.config_entries"
-    entries = json.loads(entries_path.read_text())["data"]["entries"]
-    config = next(entry["data"] for entry in entries if entry.get("domain") == "sonoff")
+    config = load_sonoff_config(args.ha_config)
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
         cloud = XRegistryCloud(session)
         await cloud.login(**config)
@@ -29,10 +29,10 @@ async def run(args: argparse.Namespace) -> int:
         )
         if device is None:
             raise RuntimeError(f"device {args.device_id} is not present in the eWeLink account")
-        device_model = device.get("extra", {}).get("model", device.get("productModel"))
-        if device_model != args.model:
+        model = device_model(device)
+        if model != args.model:
             raise RuntimeError(
-                f"refusing model {device_model!r}; expected {args.model!r}"
+                f"refusing model {model!r}; expected {args.model!r}"
             )
         if not await cloud.connect():
             raise RuntimeError("could not open the eWeLink cloud websocket")
