@@ -10,17 +10,17 @@ import struct
 import sys
 import zlib
 
-from build_minir3_ota import _verified_minir3_layout
 from package_ota import build_ota_xz_image, PackageError
 
 
 STAGE_MAGIC = b"LT602STG"
 STAGE_MANIFEST_SIZE = 96
+MINIR3_INACTIVE_CAPACITY = 0xB4000
+FACTORY_OTA_SLACK = 32
 
 
-def make_minir3_staged_ota(backup: bytes, staged_image: bytes, hw_version: str,
+def make_minir3_staged_ota(staged_image: bytes, hw_version: str,
                            sw_version: str) -> tuple[bytes, bytes]:
-    _, _, inactive_capacity = _verified_minir3_layout(backup)
     if len(staged_image) < 0x1000 or not staged_image.startswith(b"BFNP"):
         raise PackageError("staged image has no BL602 BFNP boot header")
     helper_length = 0x1000 + struct.unpack_from("<I", staged_image, 120)[0]
@@ -38,10 +38,11 @@ def make_minir3_staged_ota(backup: bytes, staged_image: bytes, hw_version: str,
     expected_length = payload_offset + compressed_size
     if expected_length != len(staged_image):
         raise PackageError("staged image length does not match its manifest")
-    if len(staged_image) > inactive_capacity - 32:
+    usable_capacity = MINIR3_INACTIVE_CAPACITY - FACTORY_OTA_SLACK
+    if len(staged_image) > usable_capacity:
         raise PackageError(
             f"staged image is {len(staged_image)} bytes; inactive slot usable capacity is "
-            f"{inactive_capacity - 32}"
+            f"{usable_capacity}"
         )
     manifest = staged_image[manifest_offset : manifest_offset + STAGE_MANIFEST_SIZE]
     if struct.unpack_from("<I", manifest, STAGE_MANIFEST_SIZE - 4)[0] != (
@@ -53,12 +54,11 @@ def make_minir3_staged_ota(backup: bytes, staged_image: bytes, hw_version: str,
         raise PackageError("staged image compressed payload SHA-256 mismatch")
     if firmware_size <= 0:
         raise PackageError("staged image firmware length is zero")
-    return build_ota_xz_image(staged_image, hw_version, sw_version, inactive_capacity - 32)
+    return build_ota_xz_image(staged_image, hw_version, sw_version, usable_capacity)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backup", type=Path, required=True, help="verified full-flash backup")
     parser.add_argument("--staged-image", type=Path, required=True, help="LibreTiny image_firmware_staged.bin")
     parser.add_argument("--hardware-version", required=True)
     parser.add_argument("--software-version", required=True)
@@ -66,7 +66,6 @@ def main() -> int:
     args = parser.parse_args()
     try:
         package, staged = make_minir3_staged_ota(
-            args.backup.read_bytes(),
             args.staged_image.read_bytes(),
             args.hardware_version,
             args.software_version,

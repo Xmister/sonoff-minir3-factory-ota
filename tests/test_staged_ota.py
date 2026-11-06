@@ -8,9 +8,6 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-sys.path.insert(0, str(ROOT / "tests"))
-
-from test_package_ota import make_test_backup
 
 
 def load_script(name):
@@ -57,10 +54,18 @@ class StagedOtaTests(unittest.TestCase):
         image[-len(compressed) :] = compressed
 
         result, payload = staged.make_minir3_staged_ota(
-            make_test_backup(), bytes(image), "MINIR3", "test"
+            bytes(image), "MINIR3", "test"
         )
         self.assertTrue(result.startswith(package.OTA_MAGIC))
         self.assertEqual(result[package.OTA_HEADER_SIZE :], payload)
+
+    def test_rejects_an_image_larger_than_the_factory_ota_slot(self):
+        with self.assertRaises(package.PackageError):
+            staged.make_minir3_staged_ota(
+                b"BFNP" + b"\0" * (staged.MINIR3_INACTIVE_CAPACITY + 1),
+                "MINIR3",
+                "test",
+            )
 
 
 if __name__ == "__main__":
